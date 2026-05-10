@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # Rate-limit rotation (Iter 2): drop rate_limits rows older than this
     rate_limit_retention_hours: int = 168
 
+    # Dashboard (Iter 3)
+    dashboard_user: str = "admin"
+    dashboard_password: str = "change-me-please"
+    data_dir: str = "data"
+
     @property
     def quiet_hours_start(self) -> tuple[int, int]:
         h, m = self.quiet_hours.split("-")[0].split(":")

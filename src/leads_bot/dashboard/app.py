@@ -33,6 +33,8 @@ def create_app() -> FastAPI:
     async def health():
         return {"status": "ok"}
 
+    from leads_bot.dashboard.routes import register_all
+    register_all(app)
     return app
 
 
