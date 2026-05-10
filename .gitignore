@@ -1,0 +1,14 @@
+.env
+*.session
+*.session-journal
+data/bot.db
+data/bot.db-journal
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+tests/cassettes/
+!tests/cassettes/.gitkeep
+*.log
+.DS_Store
