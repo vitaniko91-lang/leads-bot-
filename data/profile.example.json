@@ -1,0 +1,22 @@
+{
+  "name": "Vitalina",
+  "portfolio_url": "https://vitalina.design",
+  "telegram": "@Vita_webdesigner",
+  "min_rate_usd_per_hour": 50,
+  "tone": "friendly but professional, no formality, no excessive emoji",
+  "payment_methods": ["wise", "payoneer", "crypto", "iban_eu", "ua_card"],
+  "cases": [
+    {
+      "title": "Crypto landing for fintech",
+      "tags": ["landing", "fintech", "design_system"],
+      "description": "Designed landing + design system for a crypto wallet startup. Result: 3x conversion vs. previous version.",
+      "url": "https://vitalina.design/cases/crypto-wallet"
+    },
+    {
+      "title": "SaaS dashboard for analytics tool",
+      "tags": ["app", "saas", "ui_ux"],
+      "description": "End-to-end UI/UX for a B2B analytics dashboard. 40+ screens.",
+      "url": "https://vitalina.design/cases/analytics-dashboard"
+    }
+  ]
+}
