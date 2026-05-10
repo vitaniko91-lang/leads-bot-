@@ -1,6 +1,7 @@
 """aiogram Bot/Dispatcher setup. See spec §6.4."""
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from leads_bot.config import get_settings
 
@@ -14,7 +15,8 @@ def build_bot() -> Bot:
 
 
 def build_dispatcher() -> Dispatcher:
-    return Dispatcher()
+    """Dispatcher with in-memory FSM storage (single-user bot, no need for Redis)."""
+    return Dispatcher(storage=MemoryStorage())
 
 
 async def send_lead_card(bot: Bot, owner_tg_id: int, text: str, keyboard) -> int:

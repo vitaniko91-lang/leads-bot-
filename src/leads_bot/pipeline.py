@@ -65,3 +65,42 @@ class Pipeline:
         return any(s in lower for s in [
             "в лс", "пишите в", "write in dm", "dm me", "dms open", "in dm",
         ])
+
+    async def regenerate_draft(self, lead_id: int) -> None:
+        """Regenerate the draft for an existing lead and resend the card to owner."""
+        from sqlalchemy import select
+
+        from leads_bot.db.session import get_session_factory
+        from leads_bot.notifier.bot import send_lead_card
+        from leads_bot.notifier.card import build_keyboard, format_lead_card
+
+        factory = get_session_factory()
+        async with factory() as session:
+            lead = (await session.execute(
+                select(Lead).where(Lead.id == lead_id)
+            )).scalar_one_or_none()
+            if lead is None:
+                raise ValueError(f"Lead {lead_id} not found")
+
+            await session.refresh(lead, attribute_names=["source"])
+            try:
+                draft_text = await self._drafter.draft(
+                    lead_text=lead.raw_text,
+                    project_type=lead.project_type or "other",
+                    client_language=lead.language or "en",
+                )
+            except Exception as e:
+                logger.exception(f"Drafter retry failed for lead {lead_id}: {e}")
+                raise
+
+            response = Response(
+                lead_id=lead.id, draft_text=draft_text,
+                status="drafted",
+                sent_to="dm" if self._wants_dm(lead.raw_text) else "chat",
+            )
+            session.add(response)
+            await session.commit()
+
+            card = format_lead_card(lead, response)
+            kb = build_keyboard(response_id=response.id, source_id=lead.source.id)
+            await send_lead_card(self._bot, self._owner, card, kb)

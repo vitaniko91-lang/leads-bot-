@@ -107,3 +107,4 @@ class BotState(Base):
     last_rate_limit_rotation_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
+    quiet_hours_override: Mapped[str | None] = mapped_column(String(20), nullable=True)
