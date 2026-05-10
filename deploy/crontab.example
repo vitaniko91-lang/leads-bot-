@@ -1,0 +1,4 @@
+# Host crontab for leads-bot daily backup.
+# Install:  crontab -e   then paste the line below.
+# Adjust the time (here: 04:15 UTC) to your preference.
+15 4 * * * docker exec leads-bot python /app/scripts/backup.py >> /var/log/leads-bot-backup.log 2>&1
