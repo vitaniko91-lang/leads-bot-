@@ -93,3 +93,17 @@ class RateLimit(Base):
     window: Mapped[str] = mapped_column(String(10))
     window_start: Mapped[datetime] = mapped_column(DateTime)
     sent_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class BotState(Base):
+    """Single-row table (id=1) holding mutable runtime flags."""
+    __tablename__ = "bot_state"
+
+    id: Mapped[int] = mapped_column(primary_key=True)  # always 1
+    paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_digest_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_health_ok_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    consecutive_health_fails: Mapped[int] = mapped_column(Integer, default=0)
+    last_rate_limit_rotation_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )

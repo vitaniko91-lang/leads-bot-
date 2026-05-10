@@ -51,3 +51,14 @@ async def test_region_field_accepts_valid_values(session):
     session.add(src)
     await session.commit()
     assert src.region == "eu"
+
+
+async def test_botstate_singleton_row(session):
+    from leads_bot.db.models import BotState
+
+    s = BotState(id=1, paused=False, consecutive_health_fails=0)
+    session.add(s)
+    await session.commit()
+    assert s.id == 1
+    assert s.paused is False
+    assert s.consecutive_health_fails == 0

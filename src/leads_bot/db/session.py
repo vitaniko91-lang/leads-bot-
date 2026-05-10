@@ -24,3 +24,18 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     if _session_factory is None:
         _session_factory = async_sessionmaker(get_engine(), expire_on_commit=False)
     return _session_factory
+
+
+async def ensure_bot_state(factory: async_sessionmaker[AsyncSession]) -> None:
+    """Insert the singleton BotState(id=1) row if missing. Idempotent."""
+    from sqlalchemy import select
+
+    from leads_bot.db.models import BotState
+
+    async with factory() as session:
+        existing = (await session.execute(
+            select(BotState).where(BotState.id == 1)
+        )).scalar_one_or_none()
+        if existing is None:
+            session.add(BotState(id=1, paused=False, consecutive_health_fails=0))
+            await session.commit()
