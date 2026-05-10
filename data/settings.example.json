@@ -1,0 +1,8 @@
+{
+  "quiet_hours": "23:00-08:00",
+  "min_budget_usd": 300,
+  "min_relevance_score": 60,
+  "max_responses_per_hour": 5,
+  "max_responses_per_day": 30,
+  "max_responses_per_week": 150
+}
