@@ -85,3 +85,37 @@ export type SettingsPayload = {
   max_responses_per_day: number;
   max_responses_per_week: number;
 };
+
+export type Template = {
+  id: number;
+  name: string;
+  variant: string;
+  prompt: string;
+  active: boolean;
+  traffic_share: number;
+  sent_count: number;
+  reply_count: number;
+  conversion_rate: number;
+  is_winner: boolean;
+};
+
+export type HotHoursResponse = {
+  matrix: number[][];
+  owner_tz: string;
+  total: number;
+  insight: string;
+  weekday_labels: string[];
+  hour_labels: string[];
+};
+
+export type DiscoveryCandidate = {
+  id: number;
+  tg_id: number;
+  title: string;
+  description: string | null;
+  member_count: number | null;
+  language: string | null;
+  predicted_region: string | null;
+  matched_query: string | null;
+  status: string;
+};
