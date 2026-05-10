@@ -68,3 +68,40 @@ sudo crontab -e
 pytest                                                  # all unit + integration
 pytest tests/integration/test_quiet_hours_flow.py -v    # verify quiet behavior
 ```
+
+## Dashboard (Iteration 3)
+
+Dashboard adds three containers managed by the same `docker-compose.yml`:
+
+- `dashboard-api` — FastAPI + uvicorn on `:8000` (internal only).
+- `dashboard-ui` — Next.js 16 on `:3000` (internal only).
+- `caddy` — TLS-terminating reverse proxy on `:80` and `:443`.
+
+### Local development
+
+```bash
+# 1. Backend
+python -m leads_bot.dashboard.main         # uvicorn on :8000
+
+# 2. Frontend
+cd dashboard-ui
+cp .env.local.example .env.local           # set DASHBOARD_API_BASE_URL=http://localhost:8000
+npm install                                # if not done
+npm run dev                                # Next.js on :3000
+```
+
+Open http://localhost:3000 — Basic auth uses `DASHBOARD_USER` / `DASHBOARD_PASSWORD` from `.env`.
+
+### Production deploy
+
+1. Set `DOMAIN=dashboard.<your-domain>` and `DASHBOARD_PASSWORD=...` in `/opt/leads-bot/.env`.
+2. Point an A record for that subdomain at the VPS IP.
+3. `docker compose pull && docker compose up -d --build dashboard-api dashboard-ui caddy`
+4. Caddy auto-provisions a Let's Encrypt cert on first hit.
+5. Browser to `https://dashboard.<your-domain>` → Basic auth prompt → done.
+
+### Caveats
+
+- `dashboard-api` MUST run with `workers=1` (SSE polling watermark per connection).
+- SQLite uses WAL mode. Bot + dashboard share `./data/bot.db`. Dashboard writes are limited to `responses.notes`, `responses.client_status`, `sources.status`/`muted_until`, `data/profile.json`, `data/settings.json`.
+- `Caddyfile` requires `flush_interval -1` on `/api/stream/*`; without it SSE is buffered and live updates break.
