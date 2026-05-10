@@ -1,0 +1,23 @@
+[
+  {
+    "tg_id": -1001234567890,
+    "title": "Design Jobs UA",
+    "type": "channel",
+    "language": "uk",
+    "region": "ua"
+  },
+  {
+    "tg_id": -1001234567891,
+    "title": "UX Freelance EN",
+    "type": "channel",
+    "language": "en",
+    "region": "en_global"
+  },
+  {
+    "tg_id": -1001234567892,
+    "title": "Design Jobs Europe",
+    "type": "channel",
+    "language": "en",
+    "region": "eu"
+  }
+]
