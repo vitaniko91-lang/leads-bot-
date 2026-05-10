@@ -1,0 +1,31 @@
+{
+    email admin@example.com
+}
+
+{$DOMAIN:dashboard.localhost} {
+    encode gzip zstd
+
+    # SSE — DO NOT buffer. Critical for /api/stream/*.
+    @sse path /api/stream/*
+    handle @sse {
+        reverse_proxy dashboard-api:8000 {
+            flush_interval -1
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # API — Basic auth handled by FastAPI itself
+    handle /api/* {
+        reverse_proxy dashboard-api:8000
+    }
+
+    # Frontend (Next.js)
+    handle {
+        reverse_proxy dashboard-ui:3000
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
