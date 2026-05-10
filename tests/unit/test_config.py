@@ -31,3 +31,36 @@ def test_settings_quiet_hours_parsed(monkeypatch):
     s = Settings()
     assert s.quiet_hours_start == (22, 0)
     assert s.quiet_hours_end == (7, 30)
+
+
+def test_settings_quiet_hours_enabled_default(monkeypatch):
+    for k, v in [("TELEGRAM_API_ID", "1"), ("TELEGRAM_API_HASH", "x"),
+                 ("TELEGRAM_PHONE", "+1"), ("BOT_TOKEN", "x"),
+                 ("OWNER_TG_ID", "1"), ("ANTHROPIC_API_KEY", "x")]:
+        monkeypatch.setenv(k, v)
+    s = Settings()
+    assert s.quiet_hours_enabled is True
+    assert s.digest_time == "08:15"
+    assert s.healthcheck_interval_sec == 600
+    assert s.healthcheck_failure_threshold == 3
+    assert s.rate_limit_retention_hours == 168
+
+
+def test_settings_digest_time_parsed(monkeypatch):
+    for k, v in [("TELEGRAM_API_ID", "1"), ("TELEGRAM_API_HASH", "x"),
+                 ("TELEGRAM_PHONE", "+1"), ("BOT_TOKEN", "x"),
+                 ("OWNER_TG_ID", "1"), ("ANTHROPIC_API_KEY", "x"),
+                 ("DIGEST_TIME", "09:30")]:
+        monkeypatch.setenv(k, v)
+    s = Settings()
+    assert s.digest_time_hm == (9, 30)
+
+
+def test_settings_quiet_hours_disabled_when_set_false(monkeypatch):
+    for k, v in [("TELEGRAM_API_ID", "1"), ("TELEGRAM_API_HASH", "x"),
+                 ("TELEGRAM_PHONE", "+1"), ("BOT_TOKEN", "x"),
+                 ("OWNER_TG_ID", "1"), ("ANTHROPIC_API_KEY", "x"),
+                 ("QUIET_HOURS_ENABLED", "false")]:
+        monkeypatch.setenv(k, v)
+    s = Settings()
+    assert s.quiet_hours_enabled is False
