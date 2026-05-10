@@ -1,4 +1,4 @@
-"""Callback handlers for inline keyboard. See spec §6.4."""
+"""Callback handlers for inline keyboard. See spec §6.4 + §6.6."""
 from datetime import datetime, timedelta
 
 from loguru import logger
@@ -6,6 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from leads_bot.db.models import Response, Source
+from leads_bot.discovery.repo import DiscoveryRepo
+
+CLIENT_STATUS_MAP = {
+    "reply_in_dialog": "in_dialog",
+    "reply_in_work": "in_work",
+    "reply_rejected": "rejected",
+}
 
 
 async def handle_callback(callback, session_factory: async_sessionmaker, sender) -> None:
@@ -64,6 +71,45 @@ async def handle_callback(callback, session_factory: async_sessionmaker, sender)
         # earlier in main.py) catches `edit:*` before this fallback handler.
         # Kept as a no-op for safety.
         await callback.answer()
+
+    elif action == "discover_add":
+        async with session_factory() as session:
+            try:
+                src = await DiscoveryRepo(session).approve(target_id)
+            except ValueError:
+                await callback.answer("Кандидат не найден")
+                return
+        await callback.answer(f"✅ Добавлен: {src.title}")
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+
+    elif action == "discover_reject":
+        async with session_factory() as session:
+            await DiscoveryRepo(session).reject(target_id)
+        await callback.answer("❌ Не предлагать снова")
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+
+    elif action in CLIENT_STATUS_MAP:
+        new_status = CLIENT_STATUS_MAP[action]
+        async with session_factory() as session:
+            resp = (await session.execute(
+                select(Response).where(Response.id == target_id)
+            )).scalar_one_or_none()
+            if not resp:
+                await callback.answer("Response not found")
+                return
+            resp.client_status = new_status
+            await session.commit()
+        await callback.answer(f"Помечено: {new_status}")
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
 
     else:
         await callback.answer("Unknown action")
