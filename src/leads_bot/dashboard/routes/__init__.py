@@ -8,12 +8,14 @@ from fastapi import FastAPI
 
 def register_all(app: FastAPI) -> None:
     from leads_bot.dashboard.routes import (
+        discovery,
         leads,
         profile,
         settings as settings_route,
         sources,
         stats,
         stream,
+        templates,
     )
     app.include_router(stats.router)
     app.include_router(leads.router)
@@ -21,3 +23,5 @@ def register_all(app: FastAPI) -> None:
     app.include_router(profile.router)
     app.include_router(settings_route.router)
     app.include_router(stream.router)
+    app.include_router(templates.router)
+    app.include_router(discovery.router)
