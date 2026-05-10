@@ -1,0 +1,22 @@
+services:
+  bot:
+    build: .
+    container_name: leads-bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./sessions:/app/sessions
+    working_dir: /app
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sqlite3; sqlite3.connect('/app/data/bot.db').execute('SELECT 1')"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
