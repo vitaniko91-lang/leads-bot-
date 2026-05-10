@@ -87,6 +87,24 @@ async def test_sender_skips_when_rate_limited(session, monkeypatch):
     fake_telethon.send_message.assert_not_awaited()
 
 
+async def test_sender_increments_template_sent_count(session):
+    from leads_bot.db.models import Template
+
+    tpl = Template(name="x", variant="A", active=True, traffic_share=100, prompt="p")
+    session.add(tpl); await session.commit()
+
+    src, lead, resp = await _setup(session, sent_to="dm")
+    resp.template_id = tpl.id
+    await session.commit()
+
+    fake_telethon = _fake_client_with_action()
+    sender = Sender(telethon_client=fake_telethon)
+    await sender.send(session, resp.id)
+
+    await session.refresh(tpl)
+    assert tpl.sent_count == 1
+
+
 async def test_sender_marks_failed_on_user_blocked(session):
     from telethon.errors import UserIsBlockedError
 

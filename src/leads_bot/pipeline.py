@@ -23,13 +23,16 @@ def _utcnow_aware() -> datetime:
 class Pipeline:
     def __init__(
         self, analyzer: Analyzer, drafter: Drafter, bot,
-        owner_tg_id: int, factory: async_sessionmaker | None = None,
+        owner_tg_id: int,
+        factory: async_sessionmaker | None = None,
+        templates=None,  # TemplateRepo, kept for parity (drafter already holds one)
     ):
         self._analyzer = analyzer
         self._drafter = drafter
         self._bot = bot
         self._owner = owner_tg_id
         self._factory = factory
+        self._templates = templates
         self._settings = get_settings()
 
     async def _is_paused(self, session: AsyncSession) -> bool:
@@ -70,7 +73,7 @@ class Pipeline:
         sent_to = "dm" if self._wants_dm(analyzed.raw_text) else "chat"
 
         try:
-            draft_text = await self._drafter.draft(
+            draft = await self._drafter.draft(
                 lead_text=analyzed.raw_text,
                 project_type=analyzed.project_type or "other",
                 client_language=analyzed.language or "en",
@@ -85,7 +88,10 @@ class Pipeline:
         in_quiet = quiet and is_in_quiet_window(_utcnow_aware(), *quiet)
 
         response = Response(
-            lead_id=lead.id, draft_text=draft_text,
+            lead_id=lead.id,
+            template_id=draft.template_id,
+            author_tg_id_cached=lead.author_tg_id,
+            draft_text=draft.text,
             status="pending_digest" if in_quiet else "drafted",
             sent_to=sent_to,
         )
@@ -113,7 +119,7 @@ class Pipeline:
                 raise ValueError(f"Lead {lead_id} not found")
             await session.refresh(lead, attribute_names=["source"])
             try:
-                draft_text = await self._drafter.draft(
+                draft = await self._drafter.draft(
                     lead_text=lead.raw_text,
                     project_type=lead.project_type or "other",
                     client_language=lead.language or "en",
@@ -122,7 +128,10 @@ class Pipeline:
                 logger.exception(f"Drafter retry failed for lead {lead_id}: {e}")
                 raise
             response = Response(
-                lead_id=lead.id, draft_text=draft_text,
+                lead_id=lead.id,
+                template_id=draft.template_id,
+                author_tg_id_cached=lead.author_tg_id,
+                draft_text=draft.text,
                 status="drafted",
                 sent_to="dm" if self._wants_dm(lead.raw_text) else "chat",
             )

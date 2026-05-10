@@ -50,7 +50,9 @@ async def test_during_quiet_no_card_response_marked_pending(session_and_factory)
         await s.commit(); return l
 
     analyzer.analyze_and_persist = AsyncMock(side_effect=_analyze)
-    drafter = MagicMock(); drafter.draft = AsyncMock(return_value="hi")
+    from leads_bot.drafter.drafter import DraftResult
+    drafter = MagicMock()
+    drafter.draft = AsyncMock(return_value=DraftResult(text="hi", template_id=None))
     bot = MagicMock(); bot.send_message = AsyncMock()
 
     pipeline = Pipeline(

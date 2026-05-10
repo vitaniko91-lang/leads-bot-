@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from leads_bot.db.models import Base, Lead, Response, Source
+from leads_bot.drafter.drafter import DraftResult
 from leads_bot.pipeline import Pipeline
 
 
@@ -58,7 +59,9 @@ async def test_qualifying_lead_creates_response_and_notifies(session):
     analyzer.analyze_and_persist = AsyncMock(side_effect=_analyze)
 
     drafter = MagicMock()
-    drafter.draft = AsyncMock(return_value="Hi! Saw your post about a crypto landing...")
+    drafter.draft = AsyncMock(
+        return_value=DraftResult(text="Hi! Saw your post about a crypto landing...", template_id=None)
+    )
 
     bot = MagicMock()
     bot.send_message = AsyncMock(return_value=MagicMock(message_id=42))

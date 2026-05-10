@@ -63,6 +63,10 @@ class Sender:
         await session.commit()
         logger.info(f"Sent response {response_id}")
 
+        if resp.template_id is not None:
+            from leads_bot.templates.repo import TemplateRepo
+            await TemplateRepo(session).record_send(resp.template_id)
+
     def _resolve_target(self, lead: Lead, resp: Response):
         """Decide target based on resp.sent_to."""
         if resp.sent_to == "dm":
