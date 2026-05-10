@@ -60,10 +60,10 @@ async def handle_callback(callback, session_factory: async_sessionmaker, sender)
         await callback.answer("🔇 Канал заглушён на 1 час")
 
     elif action == "edit":
-        await callback.answer(
-            "✏️ Редактирование появится в Итерации 2. Пока — скип или апрув.",
-            show_alert=True,
-        )
+        # Iter 2: this branch is unreachable — the FSM router (registered
+        # earlier in main.py) catches `edit:*` before this fallback handler.
+        # Kept as a no-op for safety.
+        await callback.answer()
 
     else:
         await callback.answer("Unknown action")
