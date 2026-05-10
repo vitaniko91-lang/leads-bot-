@@ -69,21 +69,34 @@ class Lead(Base):
 
 class Response(Base):
     __tablename__ = "responses"
-    __table_args__ = (Index("ix_responses_status_sent", "status", "sent_at"),)
+    __table_args__ = (
+        Index("ix_responses_status_sent", "status", "sent_at"),
+        Index(
+            "ix_responses_author_status_sent",
+            "author_tg_id_cached", "status", "sent_at",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     lead_id: Mapped[int] = mapped_column(ForeignKey("leads.id"))
-    template_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("templates.id"), nullable=True,
+    )
+    author_tg_id_cached: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True,
+    )
     draft_text: Mapped[str] = mapped_column(Text)
     final_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="drafted")
     sent_to: Mapped[str | None] = mapped_column(String(10), nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     client_replied: Mapped[bool] = mapped_column(Boolean, default=False)
+    client_replied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     client_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     lead: Mapped["Lead"] = relationship(back_populates="responses")
+    template: Mapped["Template | None"] = relationship()
 
 
 class RateLimit(Base):
@@ -108,3 +121,39 @@ class BotState(Base):
         DateTime, nullable=True
     )
     quiet_hours_override: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+
+class Template(Base):
+    __tablename__ = "templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    prompt: Mapped[str] = mapped_column(Text)
+    variant: Mapped[str] = mapped_column(String(20))            # A | B | control
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    traffic_share: Mapped[int] = mapped_column(Integer, default=0)
+    sent_count: Mapped[int] = mapped_column(Integer, default=0)
+    reply_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow,
+    )
+
+
+class DiscoveryCandidate(Base):
+    __tablename__ = "discovery_candidates"
+    __table_args__ = (
+        UniqueConstraint("tg_id", name="uq_discovery_tg_id"),
+        Index("ix_discovery_status_discovered", "status", "discovered_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    member_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    predicted_region: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    discovered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    matched_query: Mapped[str | None] = mapped_column(String(255), nullable=True)
