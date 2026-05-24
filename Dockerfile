@@ -10,7 +10,7 @@ RUN uv pip install --system --no-cache .
 
 COPY alembic.ini ./
 COPY src/leads_bot/db/migrations ./src/leads_bot/db/migrations
-COPY data/profile.example.json ./data/
+COPY data/profile.example.json data/templates.example.json data/sources.example.json data/settings.example.json ./data/
 COPY scripts/ ./scripts/
 
 RUN mkdir -p /app/data /app/logs
