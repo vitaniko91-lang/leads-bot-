@@ -23,6 +23,36 @@ def _result(channels):
     return r
 
 
+@pytest.fixture(autouse=True)
+def _patch_get_peer_id(monkeypatch):
+    """Stub Telethon's get_peer_id (it rejects MagicMock entities) with a
+    faithful channel-marking: bare id N -> marked -100N. Mirrors what the
+    real impl returns for a Channel entity."""
+    monkeypatch.setattr(
+        "leads_bot.discovery.searcher.get_peer_id",
+        lambda chat: int(f"-100{chat.id}"),
+    )
+
+
+async def test_candidates_use_marked_peer_id_not_bare_chat_id():
+    """Regression: discovery must persist the Telethon *marked* id (-100...)
+    via get_peer_id, never the bare chat.id. A bare positive id can never
+    equal event.chat_id in the listener, so it yields a silently-dead source.
+    See the 2026-05-27 source-table cleanup."""
+    fake_client = AsyncMock(return_value=_result([
+        _channel(1444340242, "Design Jobs UA", 5000, "Ukraine"),
+    ]))
+
+    searcher = DiscoverySearcher(fake_client, sleep_seconds=0)
+    out = await searcher.search_query("designer", "ua", "uk")
+
+    assert len(out) == 1
+    assert out[0].tg_id == -1001444340242, (
+        "searcher must route chat through get_peer_id (marked id), "
+        "not store the bare chat.id"
+    )
+
+
 async def test_search_returns_raw_candidates_dropping_ru():
     fake_client = AsyncMock(return_value=_result([
         _channel(101, "Design Jobs UA", 5000, "Ukraine"),

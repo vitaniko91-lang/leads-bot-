@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from loguru import logger
 from telethon.errors.rpcerrorlist import FloodWaitError
 from telethon.tl.functions.contacts import SearchRequest
+from telethon.utils import get_peer_id
 
 from leads_bot.discovery.blocklist import is_ru_channel
 
@@ -48,7 +49,9 @@ class DiscoverySearcher:
             if members <= 0:
                 continue
             out.append(RawCandidate(
-                tg_id=int(chat.id),
+                # Telethon-marked id (-100...) so it matches event.chat_id in
+                # the listener; bare chat.id yields a silently-dead source.
+                tg_id=get_peer_id(chat),
                 title=title,
                 description=about,
                 member_count=int(members),
