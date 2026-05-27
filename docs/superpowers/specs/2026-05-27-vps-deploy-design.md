@@ -1,70 +1,80 @@
-# VPS Deploy — Bot as a System Service (design)
+# VPS Deploy — Bot as a systemd Service (design)
 
 **Date:** 2026-05-27
-**Context:** Бот сейчас работает на Mac в интерактивном терминале (PID-процесс умирает при закрытии терминала/сне ноута). Нужно перенести его на VPS так, чтобы он работал круглосуточно, независимо от Mac, и сам поднимался после ребута сервера.
-**Scope:** Только сервис `bot`. Дашборд (dashboard-api / dashboard-ui / Caddy / домен / HTTPS) — вне объёма, отложено.
+**Context:** Бот сейчас работает на Mac в интерактивном терминале (умирает при закрытии терминала/сне ноута). Нужно перенести его на VPS так, чтобы он работал круглосуточно, независимо от Mac, и сам поднимался после ребута сервера.
+**Scope:** Только процесс бота (`python -m leads_bot.main`). Дашборд / Caddy / домен / HTTPS — вне объёма.
+
+## Target server (осмотрено по SSH 2026-05-27)
+
+- IP `206.189.230.129`, hostname `for-bot`, root-доступ по SSH-ключу с Mac (passwordless — агент ходит напрямую).
+- Ubuntu 24.04.3 LTS, x86_64.
+- **RAM 458 МБ, swap нет** — крошечный дроплет (DO 512MB). Диск 8.7 ГБ (свободно 6.8).
+- Docker НЕ установлен. git установлен. Машина чистая (создана сегодня) — отключать нечего.
+
+## Approach: native systemd (не Docker)
+
+На 458 МБ Docker неудачен: демон ест 50–100 МБ, сборка образа (`uv pip install`) почти наверняка упадёт по OOM. Поэтому — **нативный запуск через systemd**:
+
+- Легче (нет демона Docker, нет сборки образа → нет OOM на билде).
+- Буквально «системный сервис»: `systemd` unit с `Restart=always`, `enable` при загрузке.
+- Минус: расходится с `docker-compose.yml` в репо (он остаётся для будущего деплоя на большую машину).
+
+**+1 ГБ swap** добавляем обязательно: `uv sync` на 458 МБ может упереться в память, плюс запас рантайму.
 
 ## Constraints
 
-1. **Сессия Telethon эксклюзивна.** Один и тот же `leads_bot_session.session` нельзя использовать из двух мест одновременно — Telegram убивает ключ с `AuthKeyDuplicatedError`. Уже наступали на это (VPS-контейнер + Mac одновременно). Перенос файла сессии на другую машину допустим; одновременная работа — нет.
-2. **Секреты и состояние не в git.** `.env`, `*.session`, `data/bot.db` — в `.gitignore`. `data/profile.json|sources.json|templates.json` — untracked (локальные). Всё это надо доставить на сервер вручную (scp), код — через git.
-3. **15 реальных каналов живут только в `data/bot.db`.** Они добавлялись вживую через `add_dialog_sources.py` и отсутствуют в `sources.json` (там только 1 тестовый канал). Значит БД переносится как есть — пересев с json потеряет источники.
-4. **У агента нет прямого доступа к серверу.** Деплой идёт по SSH, данные для подключения предоставляет владелец.
-
-## Architecture
-
-«Системный сервис» реализуется штатным механизмом репозитория — **Docker Compose**:
-
-- Сервис `bot` в `docker-compose.yml` уже имеет `restart: always`.
-- Docker daemon включается в автозапуск: `systemctl enable docker`.
-- Итог: после `docker compose up -d bot` контейнер живёт постоянно и сам поднимается после перезагрузки сервера. Отдельный `systemd`-юнит не нужен (был бы дублированием поверх Docker restart-policy).
-
-Контейнер `bot` собирается из `Dockerfile` (python:3.13-slim, uv), CMD = `alembic upgrade head && python -m leads_bot.main`. Тома монтируют `./data`, `./logs`, `./leads_bot_session.session` с хоста внутрь контейнера.
+1. **Сессия Telethon эксклюзивна.** `leads_bot_session.session` нельзя использовать из двух мест одновременно (`AuthKeyDuplicatedError`). Перенос файла допустим; одновременная работа — нет. Порядок: сначала стоп Mac-бота → потом старт на сервере.
+2. **Секреты и состояние не в git.** `.env`, `*.session`, `data/bot.db` — в `.gitignore`; `data/profile.json|sources.json|templates.json` — untracked. Всё доставляется на сервер через scp, код — через git.
+3. **15 реальных каналов живут только в `data/bot.db`** (добавлены вживую, в `sources.json` их нет). БД переносится как есть.
 
 ## Deploy flow
 
-### Phase 0 — Mac (подготовка)
-1. Запушить актуальный код в `origin/main` (2 коммита: test-isolation + discovery id-fix). Сервер берёт код из git.
-2. **Остановить локального бота навсегда** (Ctrl+C в терминале / kill PID). С этого момента бот на Mac не запускается.
+### Phase 0 — Mac
+1. Запушить актуальный код в `origin/main` (4 коммита: test-isolation, discovery id-fix, deploy spec, + обновление спеки).
+2. Подготовить файлы для переноса (они уже на месте локально).
 
-### Phase 1 — Server (provision)
-3. Подключиться по SSH.
-4. Проверить наличие Docker + compose-плагина; при отсутствии — установить (`get.docker.com` или пакетный менеджер дистрибутива).
-5. `git clone` репозитория в рабочую папку (напр. `~/leads-bot`).
+### Phase 1 — Server: окружение
+3. Добавить swap 1 ГБ (`fallocate /swapfile`, `mkswap`, `swapon`, запись в `/etc/fstab`).
+4. Поставить uv (`curl -LsSf https://astral.sh/uv/install.sh | sh`), убедиться, что есть Python 3.13 (uv поставит при необходимости).
+5. `git clone` репозитория в `/opt/leads-bot`.
+6. `uv sync` (создать venv с зависимостями).
 
-### Phase 2 — Transfer (scp Mac → server)
-Доставить в папку репозитория на сервере файлы, которых нет в git:
+### Phase 2 — Transfer (scp Mac → server, в `/opt/leads-bot`)
 - `.env`
 - `leads_bot_session.session`
 - `data/bot.db`
 - `data/profile.json`, `data/sources.json`, `data/templates.json`
 
-### Phase 3 — Launch
-6. `systemctl enable docker` (автозапуск демона при загрузке).
-7. `docker compose up -d --build bot` (поднимается только `bot`, без dashboard/caddy).
+### Phase 3 — Service
+7. `uv run alembic upgrade head` (на перенесённой БД — no-op, уже на head).
+8. Создать `/etc/systemd/system/leads-bot.service`:
+   - `WorkingDirectory=/opt/leads-bot`
+   - `ExecStart=<uv path> run python -m leads_bot.main`
+   - `Restart=always`, `RestartSec=5`
+   - `After=network-online.target`, `Wants=network-online.target`
+   - окружение часового пояса опц. (`TIMEZONE` всё равно берётся из `.env`)
+9. **Остановить бота на Mac** (стоп процесса / Ctrl+C). С этого момента Mac-бот не запускается.
+10. `systemctl daemon-reload && systemctl enable --now leads-bot`.
 
 ### Phase 4 — Verify
-8. `docker compose logs -f bot` → дождаться `Bot is up. Listening …` и `Discovery scheduler started (tz=Europe/Kyiv)`.
-9. Убедиться, что `AuthKeyDuplicatedError` НЕ появился (значит Mac-бот действительно погашен).
-10. В Telegram отправить боту `/stats` → отвечает «Бот ▶ работает».
-11. (Опц.) Проверить переживание ребута: `sudo reboot`, после старта `docker ps` показывает `leads-bot` снова `Up`.
+11. `journalctl -u leads-bot -f` → дождаться `Bot is up. Listening …` + `Discovery scheduler started (tz=Europe/Kyiv)`.
+12. Убедиться, что `AuthKeyDuplicatedError` НЕ появился (Mac-бот точно погашен).
+13. В Telegram `/stats` → «Бот ▶ работает».
+14. Проверить переживание ребута: `reboot`, после старта `systemctl status leads-bot` → `active (running)`.
 
 ## Verification criteria
-- `docker ps`: контейнер `leads-bot` в статусе `Up` (healthy).
-- В логах есть `Bot is up`, нет `AuthKeyDuplicatedError`.
+- `systemctl is-active leads-bot` → `active`.
+- В `journalctl` есть `Bot is up`, нет `AuthKeyDuplicatedError`.
 - `/stats` в Telegram отвечает.
-- После `reboot` контейнер поднимается сам.
+- После `reboot` сервис поднимается сам.
 
 ## Rollback
-Если бот на сервере не стартует:
-1. `docker compose down` на сервере.
+Если на сервере не стартует:
+1. `systemctl disable --now leads-bot` на сервере.
 2. scp `leads_bot_session.session` обратно на Mac (или заново залогиниться на Mac, удалив session).
-3. Запустить бота на Mac как раньше.
-Состояние (`bot.db`) при этом не теряется — оно есть в обеих копиях; источник правды берём с того места, где бот работал последним.
+3. Запустить бота на Mac как раньше. `bot.db` есть в обеих копиях — источник правды берём с последней рабочей машины.
 
-## Open questions (нужны для исполнения)
-- SSH: host/IP, пользователь, способ аутентификации (ключ).
-- ОС и дистрибутив сервера (Ubuntu/Debian?) — влияет на команду установки Docker.
-- Установлен ли уже Docker + compose-плагин.
-- Ресурсы сервера (RAM): сборка образа python+uv требует ~1–2 ГБ; на маленьком инстансе лучше собрать образ заранее или увеличить swap.
-- Часовой пояс самого сервера — на логику не влияет (бот читает `TIMEZONE` из `.env`), но удобнее `Europe/Kyiv` и для системного времени.
+## Open questions / risks
+- **RAM 458 МБ** — даже нативно тесновато; swap обязателен. Если бот будет OOM-иться под нагрузкой — апгрейд дроплета до 1 ГБ.
+- Часовой пояс системного времени сервера — на логику не влияет (`TIMEZONE` из `.env`), но удобнее выставить `Europe/Kyiv`.
+- uv ставит свой Python 3.13 — проверить, что сборка `uv sync` укладывается в RAM+swap.
