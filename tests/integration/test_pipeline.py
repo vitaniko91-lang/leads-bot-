@@ -15,6 +15,10 @@ async def session(monkeypatch):
         ("TELEGRAM_API_ID", "1"), ("TELEGRAM_API_HASH", "x"),
         ("TELEGRAM_PHONE", "+1"), ("BOT_TOKEN", "x"),
         ("OWNER_TG_ID", "999"), ("ANTHROPIC_API_KEY", "x"),
+        # This suite verifies the immediate draft+notify path; quiet-hours
+        # gating is covered separately in test_quiet_hours_flow.py. Disable
+        # it here so the result is deterministic regardless of wall-clock time.
+        ("QUIET_HOURS_ENABLED", "false"),
     ]:
         monkeypatch.setenv(k, v)
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
