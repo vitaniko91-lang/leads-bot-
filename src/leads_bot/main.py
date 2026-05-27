@@ -1,5 +1,6 @@
 """Async entry point — boots Telethon + aiogram + pipeline + scheduler."""
 import asyncio
+import signal
 import sys
 from pathlib import Path
 
@@ -66,6 +67,22 @@ def _setup_logging():
     )
     Path("logs").mkdir(exist_ok=True)
     logger.add("logs/bot.log", rotation="100 MB", retention="7 days", level="INFO")
+
+
+def _install_signal_handlers(
+    loop: asyncio.AbstractEventLoop, stop: asyncio.Event,
+) -> None:
+    """Set `stop` when SIGTERM/SIGINT arrives, so main() can shut down cleanly.
+
+    Without this the process ignores SIGTERM and systemd force-kills it after
+    the stop timeout on every restart/reboot (status=9/KILL).
+    """
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:
+            # Platforms without loop signal support (e.g. Windows).
+            pass
 
 
 def _build_router(
@@ -287,23 +304,40 @@ async def main():
         factory, user_client, notif_bot, settings.owner_tg_id,
     )
 
-    polling_task = asyncio.create_task(dp.start_polling(notif_bot))
+    # Central graceful-shutdown signal: aiogram must NOT install its own
+    # handlers (handle_signals=False), or they race with ours and the gather
+    # below never unblocks on SIGTERM.
+    stop = asyncio.Event()
+    _install_signal_handlers(asyncio.get_running_loop(), stop)
+
+    polling_task = asyncio.create_task(
+        dp.start_polling(notif_bot, handle_signals=False)
+    )
     telethon_task = asyncio.create_task(user_client.run_until_disconnected())
+    runtime_tasks = [polling_task, telethon_task, *bg_tasks]
 
     logger.info("Bot is up. Listening for new messages, DMs, and weekly discovery.")
+    stop_task = asyncio.create_task(stop.wait())
     try:
-        await asyncio.gather(polling_task, telethon_task, *bg_tasks)
-    except KeyboardInterrupt:
-        logger.info("Shutting down")
+        # Exit as soon as a signal fires OR any runtime task dies.
+        await asyncio.wait(
+            {stop_task, *runtime_tasks}, return_when=asyncio.FIRST_COMPLETED,
+        )
+        logger.info("Shutting down (signal or task exit)")
     finally:
+        stop_task.cancel()
         discovery.stop()
-        for t in bg_tasks:
-            t.cancel()
+        for t in runtime_tasks:
+            if not t.done():
+                t.cancel()
+        # Let cancellations propagate before tearing down connections.
+        await asyncio.gather(*runtime_tasks, stop_task, return_exceptions=True)
         await notif_bot.session.close()
         await user_client.disconnect()
         engine = get_engine()
         if engine is not None:
             await engine.dispose()
+        logger.info("Shutdown complete")
 
 
 if __name__ == "__main__":
